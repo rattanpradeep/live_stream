@@ -146,7 +146,9 @@ wss.on('connection', async (ws) => {
         if (liveSession && isLiveSessionOpen) {
             // console.log('[Server ws.onmessage] Live session IS considered open.');
             const parsedMessage = JSON.parse(message);
-            if (parsedMessage.event == "media" && parsedMessage.media.payload) {
+            if (parsedMessage.event == "connected") {
+                console.log("WS Connection established with exotel.");
+            } else if (parsedMessage.event == "media" && parsedMessage.media.payload) {
                 // console.log('[Server ws.onmessage] Message is a Buffer. Processing audio.');
                 // const base64Audio = message.toString('base64');
                 // console.log('[Client -> AI] Processing client audio. Raw message size:', message.length, 'Base64 size:', base64Audio.length);
