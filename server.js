@@ -57,6 +57,34 @@ wss.on('connection', async (ws) => {
     let isLiveSessionOpen = false;
     let sessionTimeoutId = null;
 
+    let mediaPayloadBuffer = [];
+    let bufferTimeoutId = null;
+    const BUFFER_TIMEOUT_DURATION = 1000; // 1 second
+    function sendBufferedAudio() {
+        if (mediaPayloadBuffer.length > 0) {
+            // Ensure the session is still valid before sending
+            if (liveSession && isLiveSessionOpen) {
+                const combinedPayload = mediaPayloadBuffer.join(''); // Assuming payloads are strings (e.g., Base64)
+                console.log(`[Server ws.onmessage] Sending buffered audio. Chunks: ${mediaPayloadBuffer.length}, Total combined size: ${combinedPayload.length}`);
+                try {
+                    liveSession.sendRealtimeInput({
+                        audio: {
+                            data: combinedPayload,
+                            mimeType: "audio/pcm;rate=16000" // audio/l16;rate=8000  //audio/pcm;rate=16000
+                        }
+                    });
+                    // console.log('[Server ws.onmessage] Buffered audio sent to AI.');
+                } catch (error) {
+                    console.error('[ERROR sendRealtimeInput] Synchronous error during sendRealtimeInput with buffered audio:', error);
+                }
+            } else {
+                console.log('[Server ws.onmessage] Session became invalid before buffered audio could be sent. Discarding buffer.');
+            }
+            mediaPayloadBuffer = []; // Clear buffer after attempting to send or discarding
+        }
+        bufferTimeoutId = null; // Clear the timeout ID as it has now executed
+    }
+
     try {
         liveSession = await ai.live.connect({
             model: modelName,
@@ -141,7 +169,7 @@ wss.on('connection', async (ws) => {
 
     ws.on('message', (message) => {
         // console.log('[Server ws.onmessage] Message received. Type:', typeof message, 'Is Buffer:', message instanceof Buffer);
-        console.log('[Server ws.onmessage] from exotel', JSON.parse(message))
+        // console.log('[Server ws.onmessage] from exotel', JSON.parse(message))
         // Primary check for session readiness
         if (liveSession && isLiveSessionOpen) {
             // console.log('[Server ws.onmessage] Live session IS considered open.');
@@ -152,17 +180,29 @@ wss.on('connection', async (ws) => {
                 // console.log('[Server ws.onmessage] Message is a Buffer. Processing audio.');
                 // const base64Audio = message.toString('base64');
                 // console.log('[Client -> AI] Processing client audio. Raw message size:', message.length, 'Base64 size:', base64Audio.length);
-                try {
-                    liveSession.sendRealtimeInput({
-                        audio: {
-                            data: parsedMessage.media.payload,
-                            mimeType: "audio/pcm;rate=16000" //audio/l16;rate=8000  //audio/pcm;rate=16000
-                        }
-                    });
-                    // console.log('[Server ws.onmessage] Audio sent to AI via sendRealtimeInput.');
-                } catch (error) {
-                    console.error('[ERROR sendRealtimeInput] Synchronous error during sendRealtimeInput:', error);
+                // try {
+                //     liveSession.sendRealtimeInput({
+                //         audio: {
+                //             data: parsedMessage.media.payload,
+                //             mimeType: "audio/pcm;rate=16000" //audio/l16;rate=8000  //audio/pcm;rate=16000
+                //         }
+                //     });
+                //     // console.log('[Server ws.onmessage] Audio sent to AI via sendRealtimeInput.');
+                // } catch (error) {
+                //     console.error('[ERROR sendRealtimeInput] Synchronous error during sendRealtimeInput:', error);
+                // }
+                /** */
+                mediaPayloadBuffer.push(parsedMessage.media.payload);
+                // console.log(`[Server ws.onmessage] Media payload added to buffer. Buffer now has ${mediaPayloadBuffer.length} chunks.`);
+
+                // Clear the previous timeout (if any) because new data has arrived
+                if (bufferTimeoutId) {
+                    clearTimeout(bufferTimeoutId);
                 }
+
+                // Set a new timeout to send the buffered audio after 1 second of inactivity
+                bufferTimeoutId = setTimeout(sendBufferedAudio, BUFFER_TIMEOUT_DURATION);
+                /** */
             }
         } else {
             console.log('[Server ws.onmessage] Live session not considered open. isLiveSessionOpen:', isLiveSessionOpen, 'liveSession exists:', !!liveSession);
