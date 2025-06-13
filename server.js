@@ -141,7 +141,7 @@ wss.on('connection', async (ws) => {
 
     ws.on('message', (message) => {
         // console.log('[Server ws.onmessage] Message received. Type:', typeof message, 'Is Buffer:', message instanceof Buffer);
-
+        console.log('[Server ws.onmessage] from exotel', JSON.parse(message))
         // Primary check for session readiness
         if (liveSession && isLiveSessionOpen) {
             // console.log('[Server ws.onmessage] Live session IS considered open.');
