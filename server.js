@@ -156,7 +156,7 @@ wss.on('connection', async (ws) => {
                     liveSession.sendRealtimeInput({
                         audio: {
                             data: parsedMessage.media.payload,
-                            mimeType: "audio/l16;rate=8000" //audio/l16;rate=8000  //audio/pcm;rate=16000
+                            mimeType: "audio/pcm;rate=16000" //audio/l16;rate=8000  //audio/pcm;rate=16000
                         }
                     });
                     // console.log('[Server ws.onmessage] Audio sent to AI via sendRealtimeInput.');
