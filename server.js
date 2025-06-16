@@ -3,6 +3,8 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const { GoogleGenAI, Modality } = require('@google/genai');
+const ffmpeg = require('fluent-ffmpeg');
+const { Readable } = require('stream');
 require('dotenv').config();
 // const { WaveFile } = require('wavefile'); // For potential server-side audio processing/debugging
 
@@ -60,16 +62,82 @@ wss.on('connection', async (ws) => {
     let mediaPayloadBuffer = [];
     let bufferTimeoutId = null;
     const BUFFER_TIMEOUT_DURATION = 1000; // 1 second
-    function sendBufferedAudio() {
+
+    function bufferToStream(buffer) {
+        const stream = new Readable();
+        stream.push(buffer);
+        stream.push(null);
+        return stream;
+    }
+
+    function convertToSlinBase64(inputBuffer) {
+        return new Promise((resolve, reject) => {
+            const chunks = [];
+            const inputStream = bufferToStream(inputBuffer);
+
+            ffmpeg(inputStream)
+                .inputFormat('wav') // or 'mp3', 'opus' depending on source format
+                .audioChannels(1)
+                .audioFrequency(8000)
+                .audioCodec('pcm_s16le')
+                .format('s16le') // raw PCM
+                .on('error', (err) => reject(err))
+                .on('end', () => {
+                    const rawBuffer = Buffer.concat(chunks);
+                    const base64Data = rawBuffer.toString('base64');
+                    resolve(base64Data);
+                })
+                .pipe()
+                .on('data', (chunk) => chunks.push(chunk));
+        });
+    }
+
+    function pcmToWavBase64(rawBase64) {
+        const rawBuffer = Buffer.from(rawBase64, 'base64');
+        const numChannels = 1;
+        const sampleRate = 8000;
+        const bitsPerSample = 16;
+        const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+        const blockAlign = (numChannels * bitsPerSample) / 8;
+        const dataSize = rawBuffer.length;
+
+        const header = Buffer.alloc(44);
+
+        // RIFF header
+        header.write('RIFF', 0); // ChunkID
+        header.writeUInt32LE(36 + dataSize, 4); // ChunkSize
+        header.write('WAVE', 8); // Format
+
+        // fmt subchunk
+        header.write('fmt ', 12); // Subchunk1ID
+        header.writeUInt32LE(16, 16); // Subchunk1Size
+        header.writeUInt16LE(1, 20); // AudioFormat (1 = PCM)
+        header.writeUInt16LE(numChannels, 22); // NumChannels
+        header.writeUInt32LE(sampleRate, 24); // SampleRate
+        header.writeUInt32LE(byteRate, 28); // ByteRate
+        header.writeUInt16LE(blockAlign, 32); // BlockAlign
+        header.writeUInt16LE(bitsPerSample, 34); // BitsPerSample
+
+        // data subchunk
+        header.write('data', 36); // Subchunk2ID
+        header.writeUInt32LE(dataSize, 40); // Subchunk2Size
+
+        const wavBuffer = Buffer.concat([header, rawBuffer]);
+        return wavBuffer.toString('base64'); // Final base64-encoded WAV
+    }
+
+
+    async function sendBufferedAudio() {
         if (mediaPayloadBuffer.length > 0) {
             // Ensure the session is still valid before sending
             if (liveSession && isLiveSessionOpen) {
                 const combinedPayload = mediaPayloadBuffer.join(''); // Assuming payloads are strings (e.g., Base64)
+                const wavBase64 = pcmToWavBase64(combinedPayload);
                 console.log(`[Server ws.onmessage] Sending buffered audio. Chunks: ${mediaPayloadBuffer.length}, Total combined size: ${combinedPayload.length}`);
                 try {
                     liveSession.sendRealtimeInput({
                         audio: {
-                            data: combinedPayload,
+                            data: wavBase64,
                             mimeType: "audio/pcm;rate=16000" // audio/l16;rate=8000  //audio/pcm;rate=16000
                         }
                     });
@@ -104,14 +172,15 @@ wss.on('connection', async (ws) => {
                     }, 120000); // 120 seconds
                     console.log('Session timer started on AI session open.'); // Added log
                 },
-                onmessage: (message) => {
+                onmessage: async (message) => {
                     if (message.data) { // Audio data from AI
                         // Send audio as binary with a type prefix
                         const audioBuffer = Buffer.from(message.data, 'base64');
-                        const typeBuffer = Buffer.from([0x01]); // 0x01 = audio data
-                        const combinedBuffer = Buffer.concat([typeBuffer, audioBuffer]);
+                        const base64Slin = await convertToSlinBase64(audioBuffer);
+                        // const typeBuffer = Buffer.from([0x01]); // 0x01 = audio data
+                        // const combinedBuffer = Buffer.concat([typeBuffer, audioBuffer]);
                         // ws.send(combinedBuffer);
-                        sendMediaToExotel(ws, 0, combinedBuffer, 0, 0);
+                        sendMediaToExotel(ws, 0, base64Slin, 0, 0);
                     } else if (message.serverContent) {
                         if (message.serverContent.outputTranscription) {
                             // We are not displaying transcription in this app, but logging it.
