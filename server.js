@@ -178,6 +178,12 @@ wss.on('connection', async (ws) => {
                 console.log("WS Connection established with exotel.", parsedMessage);
             } else if (parsedMessage.event == "start") {
                 console.log("START event from exotel: ", parsedMessage);
+            } else if (parsedMessage.event == "dtmf") {
+                console.log("DTMF event from exotel: ", parsedMessage);
+            } else if (parsedMessage.event == "stop") {
+                console.log("STOP event from exotel: ", parsedMessage);
+            } else if (parsedMessage.event == "mark") {
+                console.log("MARK event from exotel: ", parsedMessage);
             } else if (parsedMessage.event == "media" && parsedMessage.media.payload) {
                 // console.log('[Server ws.onmessage] Message is a Buffer. Processing audio.');
                 // const base64Audio = message.toString('base64');
