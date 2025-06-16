@@ -5,6 +5,8 @@ const WebSocket = require('ws');
 const { GoogleGenAI, Modality } = require('@google/genai');
 const ffmpeg = require('fluent-ffmpeg');
 const { Readable } = require('stream');
+const path = require('path');
+
 require('dotenv').config();
 // const { WaveFile } = require('wavefile'); // For potential server-side audio processing/debugging
 
@@ -153,6 +155,18 @@ wss.on('connection', async (ws) => {
         bufferTimeoutId = null; // Clear the timeout ID as it has now executed
     }
 
+    function writeLogFile(jsonObject) {
+        const filePath = path.join(__dirname, 'logfile.json');
+
+        const logLine = JSON.stringify(jsonObject) + '\n';
+
+        fs.appendFile(filePath, logLine, (err) => {
+            if (err) {
+                console.error('Error writing to logfile:', err);
+            }
+        });
+    }
+
     try {
         liveSession = await ai.live.connect({
             model: modelName,
@@ -236,13 +250,14 @@ wss.on('connection', async (ws) => {
         return;
     }
 
-    ws.on('message', (message) => {
+    ws.on('message', async (message) => {
         // console.log('[Server ws.onmessage] Message received. Type:', typeof message, 'Is Buffer:', message instanceof Buffer);
         // console.log('[Server ws.onmessage] from exotel', JSON.parse(message))
         // Primary check for session readiness
         if (liveSession && isLiveSessionOpen) {
             // console.log('[Server ws.onmessage] Live session IS considered open.');
             const parsedMessage = JSON.parse(message);
+            await writeLogFile(parsedMessage);
             if (parsedMessage.event == "connected") {
                 console.log("WS Connection established with exotel.", parsedMessage);
             } else if (parsedMessage.event == "start") {
