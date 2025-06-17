@@ -3,7 +3,7 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const { GoogleGenAI, Modality } = require('@google/genai');
-const ffmpeg = require('fluent-ffmpeg');
+const ffmpeg = require('ffmpeg');
 const { Readable } = require('stream');
 const path = require('path');
 
