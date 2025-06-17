@@ -189,7 +189,7 @@ wss.on('connection', async (ws) => {
                 onmessage: async (message) => {
                     if (message.data) { // Audio data from AI
                         console.log("Message from AI");
-                        
+
                         // Send audio as binary with a type prefix
                         const audioBuffer = Buffer.from(message.data, 'base64');
                         const base64Slin = await convertToSlinBase64(audioBuffer);
@@ -268,6 +268,46 @@ wss.on('connection', async (ws) => {
                 console.log("DTMF event from exotel: ", parsedMessage);
             } else if (parsedMessage.event == "stop") {
                 console.log("STOP event from exotel: ", parsedMessage);
+                /******* */
+                
+
+                // Step 1: Decode and concatenate all audio buffers
+                const audioBuffers = mediaPayloadBuffer.map(b64 => Buffer.from(b64, 'base64'));
+                const pcmData = Buffer.concat(audioBuffers);
+
+                // Step 2: Generate WAV header
+                function createWavHeader(dataLength, sampleRate = 8000, channels = 1, bitsPerSample = 16) {
+                    const byteRate = sampleRate * channels * bitsPerSample / 8;
+                    const blockAlign = channels * bitsPerSample / 8;
+                    const buffer = Buffer.alloc(44);
+
+                    buffer.write('RIFF', 0); // ChunkID
+                    buffer.writeUInt32LE(36 + dataLength, 4); // ChunkSize
+                    buffer.write('WAVE', 8); // Format
+                    buffer.write('fmt ', 12); // Subchunk1ID
+                    buffer.writeUInt32LE(16, 16); // Subchunk1Size
+                    buffer.writeUInt16LE(1, 20); // AudioFormat (1 = PCM)
+                    buffer.writeUInt16LE(channels, 22); // NumChannels
+                    buffer.writeUInt32LE(sampleRate, 24); // SampleRate
+                    buffer.writeUInt32LE(byteRate, 28); // ByteRate
+                    buffer.writeUInt16LE(blockAlign, 32); // BlockAlign
+                    buffer.writeUInt16LE(bitsPerSample, 34); // BitsPerSample
+                    buffer.write('data', 36); // Subchunk2ID
+                    buffer.writeUInt32LE(dataLength, 40); // Subchunk2Size
+
+                    return buffer;
+                }
+
+                const wavHeader = createWavHeader(pcmData.length);
+                const wavData = Buffer.concat([wavHeader, pcmData]);
+
+                // Step 3: Write to file
+                const outputPath = path.join(__dirname, 'outputaudiofile.wav');
+                fs.writeFileSync(outputPath, wavData);
+
+                console.log('WAV file written to:', outputPath);
+
+                /******* */
             } else if (parsedMessage.event == "mark") {
                 console.log("MARK event from exotel: ", parsedMessage);
             } else if (parsedMessage.event == "media" && parsedMessage.media.payload) {
@@ -286,7 +326,7 @@ wss.on('connection', async (ws) => {
                 //     console.error('[ERROR sendRealtimeInput] Synchronous error during sendRealtimeInput:', error);
                 // }
                 /** */
-                // mediaPayloadBuffer.push(parsedMessage.media.payload);
+                mediaPayloadBuffer.push(parsedMessage.media.payload);
                 // console.log(`[Server ws.onmessage] Media payload added to buffer. Buffer now has ${mediaPayloadBuffer.length} chunks.`);
                 // const wavBase64 = pcmToWavBase64(parsedMessage.media.payload);
                 // console.log(`[Server ws.onmessage] Sending buffered audio. Chunks: ${mediaPayloadBuffer.length}, Total combined size: ${combinedPayload.length}`);
