@@ -188,6 +188,8 @@ wss.on('connection', async (ws) => {
                 },
                 onmessage: async (message) => {
                     if (message.data) { // Audio data from AI
+                        console.log("Message from AI");
+                        
                         // Send audio as binary with a type prefix
                         const audioBuffer = Buffer.from(message.data, 'base64');
                         const base64Slin = await convertToSlinBase64(audioBuffer);
@@ -269,7 +271,7 @@ wss.on('connection', async (ws) => {
             } else if (parsedMessage.event == "mark") {
                 console.log("MARK event from exotel: ", parsedMessage);
             } else if (parsedMessage.event == "media" && parsedMessage.media.payload) {
-                // console.log('[Server ws.onmessage] Message is a Buffer. Processing audio.');
+                console.log('[Server ws.onmessage] Message from exotel.');
                 // const base64Audio = message.toString('base64');
                 // console.log('[Client -> AI] Processing client audio. Raw message size:', message.length, 'Base64 size:', base64Audio.length);
                 // try {
@@ -284,16 +286,29 @@ wss.on('connection', async (ws) => {
                 //     console.error('[ERROR sendRealtimeInput] Synchronous error during sendRealtimeInput:', error);
                 // }
                 /** */
-                mediaPayloadBuffer.push(parsedMessage.media.payload);
-                console.log(`[Server ws.onmessage] Media payload added to buffer. Buffer now has ${mediaPayloadBuffer.length} chunks.`);
-
-                // Clear the previous timeout (if any) because new data has arrived
-                if (bufferTimeoutId) {
-                    clearTimeout(bufferTimeoutId);
+                // mediaPayloadBuffer.push(parsedMessage.media.payload);
+                // console.log(`[Server ws.onmessage] Media payload added to buffer. Buffer now has ${mediaPayloadBuffer.length} chunks.`);
+                const wavBase64 = pcmToWavBase64(parsedMessage.media.payload);
+                // console.log(`[Server ws.onmessage] Sending buffered audio. Chunks: ${mediaPayloadBuffer.length}, Total combined size: ${combinedPayload.length}`);
+                try {
+                    liveSession.sendRealtimeInput({
+                        audio: {
+                            data: wavBase64,
+                            mimeType: "audio/pcm;rate=16000" // audio/l16;rate=8000  //audio/pcm;rate=16000
+                        }
+                    });
+                    // console.log('[Server ws.onmessage] Buffered audio sent to AI.');
+                } catch (error) {
+                    console.error('[ERROR sendRealtimeInput] Synchronous error during sendRealtimeInput with buffered audio:', error);
                 }
 
+                // Clear the previous timeout (if any) because new data has arrived
+                // if (bufferTimeoutId) {
+                //     clearTimeout(bufferTimeoutId);
+                // }
+
                 // Set a new timeout to send the buffered audio after 1 second of inactivity
-                bufferTimeoutId = setTimeout(sendBufferedAudio, BUFFER_TIMEOUT_DURATION);
+                // bufferTimeoutId = setTimeout(sendBufferedAudio, BUFFER_TIMEOUT_DURATION);
                 /** */
             }
         } else {
