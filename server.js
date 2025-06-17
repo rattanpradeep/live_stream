@@ -288,12 +288,12 @@ wss.on('connection', async (ws) => {
                 /** */
                 // mediaPayloadBuffer.push(parsedMessage.media.payload);
                 // console.log(`[Server ws.onmessage] Media payload added to buffer. Buffer now has ${mediaPayloadBuffer.length} chunks.`);
-                const wavBase64 = pcmToWavBase64(parsedMessage.media.payload);
+                // const wavBase64 = pcmToWavBase64(parsedMessage.media.payload);
                 // console.log(`[Server ws.onmessage] Sending buffered audio. Chunks: ${mediaPayloadBuffer.length}, Total combined size: ${combinedPayload.length}`);
                 try {
                     liveSession.sendRealtimeInput({
                         audio: {
-                            data: wavBase64,
+                            data: parsedMessage.media.payload, //wavBase64
                             mimeType: "audio/pcm;rate=16000" // audio/l16;rate=8000  //audio/pcm;rate=16000
                         }
                     });
