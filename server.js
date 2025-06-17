@@ -269,7 +269,7 @@ wss.on('connection', async (ws) => {
             } else if (parsedMessage.event == "stop") {
                 console.log("STOP event from exotel: ", parsedMessage);
                 /******* */
-                
+
 
                 // Step 1: Decode and concatenate all audio buffers
                 const audioBuffers = mediaPayloadBuffer.map(b64 => Buffer.from(b64, 'base64'));
@@ -330,6 +330,7 @@ wss.on('connection', async (ws) => {
                 // console.log(`[Server ws.onmessage] Media payload added to buffer. Buffer now has ${mediaPayloadBuffer.length} chunks.`);
                 // const wavBase64 = pcmToWavBase64(parsedMessage.media.payload);
                 // console.log(`[Server ws.onmessage] Sending buffered audio. Chunks: ${mediaPayloadBuffer.length}, Total combined size: ${combinedPayload.length}`);
+                const rawBuffer = Buffer.from(parsedMessage.media.payload, 'base64');
                 try {
                     liveSession.sendRealtimeInput({
                         audio: {
