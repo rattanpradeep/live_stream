@@ -73,9 +73,9 @@ wss.on('connection', async (ws) => {
     }
 
     function convertToSlinBase64(inputBuffer) {
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
             const chunks = [];
-            const inputStream = bufferToStream(inputBuffer);
+            const inputStream = await bufferToStream(inputBuffer);
 
             ffmpeg(inputStream)
                 .inputFormat('wav') // or 'mp3', 'opus' depending on source format
@@ -191,12 +191,12 @@ wss.on('connection', async (ws) => {
                         console.log("Message from AI");
 
                         // Send audio as binary with a type prefix
-                        const audioBuffer = Buffer.from(message.data, 'base64');
-                        const base64Slin = await convertToSlinBase64(audioBuffer);
+                        // const audioBuffer = Buffer.from(message.data, 'base64');
+                        // const base64Slin = await convertToSlinBase64(audioBuffer);
                         // const typeBuffer = Buffer.from([0x01]); // 0x01 = audio data
                         // const combinedBuffer = Buffer.concat([typeBuffer, audioBuffer]);
                         // ws.send(combinedBuffer);
-                        sendMediaToExotel(ws, 0, base64Slin, 0, 0);
+                        sendMediaToExotel(ws, 0, message.data, 0, 0);
                     } else if (message.serverContent) {
                         if (message.serverContent.outputTranscription) {
                             // We are not displaying transcription in this app, but logging it.
