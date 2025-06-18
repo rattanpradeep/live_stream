@@ -62,6 +62,7 @@ wss.on('connection', async (ws) => {
     let sessionTimeoutId = null;
 
     let mediaPayloadBuffer = [];
+    let geminiOutputbuffer = []
     let bufferTimeoutId = null;
     const BUFFER_TIMEOUT_DURATION = 1000; // 1 second
 
@@ -191,7 +192,8 @@ wss.on('connection', async (ws) => {
                         console.log("Message from AI");
 
                         // Send audio as binary with a type prefix
-                        // const audioBuffer = Buffer.from(message.data, 'base64');
+                        const audioBuffer = Buffer.from(message.data, 'base64');
+                        geminiOutputbuffer.push(audioBuffer)
                         // const base64Slin = await convertToSlinBase64(audioBuffer);
                         // const typeBuffer = Buffer.from([0x01]); // 0x01 = audio data
                         // const combinedBuffer = Buffer.concat([typeBuffer, audioBuffer]);
@@ -269,13 +271,6 @@ wss.on('connection', async (ws) => {
             } else if (parsedMessage.event == "stop") {
                 console.log("STOP event from exotel: ", parsedMessage);
                 /******* */
-
-
-                // Step 1: Decode and concatenate all audio buffers
-                const audioBuffers = mediaPayloadBuffer.map(b64 => Buffer.from(b64, 'base64'));
-                const pcmData = Buffer.concat(audioBuffers);
-
-                // Step 2: Generate WAV header
                 function createWavHeader(dataLength, sampleRate = 8000, channels = 1, bitsPerSample = 16) {
                     const byteRate = sampleRate * channels * bitsPerSample / 8;
                     const blockAlign = channels * bitsPerSample / 8;
@@ -298,14 +293,34 @@ wss.on('connection', async (ws) => {
                     return buffer;
                 }
 
+                /**convert input audio to wav file */
+                // Step 1: Decode and concatenate all audio buffers
+                const audioBuffers = mediaPayloadBuffer.map(b64 => Buffer.from(b64, 'base64'));
+                const pcmData = Buffer.concat(audioBuffers);
+
+                // Step 2: Generate WAV header
                 const wavHeader = createWavHeader(pcmData.length);
                 const wavData = Buffer.concat([wavHeader, pcmData]);
 
                 // Step 3: Write to file
-                const outputPath = path.join(__dirname, 'outputaudiofile.wav');
+                const outputPath = path.join(__dirname, 'inputaudiofile.wav');
                 fs.writeFileSync(outputPath, wavData);
 
-                console.log('WAV file written to:', outputPath);
+                console.log('input WAV file written to:', outputPath);
+
+                /**convert gemini response to wav file */
+                // Step 1: Decode and concatenate all audio buffers
+                const pcmData1 = Buffer.concat(geminiOutputbuffer);
+
+                // Step 2: Generate WAV header
+                const wavHeader1 = createWavHeader(pcmData1.length);
+                const wavData1 = Buffer.concat([wavHeader1, pcmData1]);
+
+                // Step 3: Write to file
+                const outputPath1 = path.join(__dirname, 'outputaudiofile.wav');
+                fs.writeFileSync(outputPath1, wavData1);
+
+                console.log('output WAV file written to:', outputPath);
 
                 /******* */
             } else if (parsedMessage.event == "mark") {
