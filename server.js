@@ -6,6 +6,7 @@ const { GoogleGenAI, Modality } = require('@google/genai');
 const ffmpeg = require('ffmpeg');
 const { Readable } = require('stream');
 const path = require('path');
+const { WaveFile } = require('wavefile')
 
 require('dotenv').config();
 // const { WaveFile } = require('wavefile'); // For potential server-side audio processing/debugging
@@ -309,16 +310,30 @@ wss.on('connection', async (ws) => {
                 console.log('input WAV file written to:', outputPath);
 
                 /**convert gemini response to wav file */
-                // Step 1: Decode and concatenate all audio buffers
-                const pcmData1 = Buffer.concat(geminiOutputbuffer);
+                // // Step 1: Decode and concatenate all audio buffers
+                // const pcmData1 = Buffer.concat(geminiOutputbuffer);
 
-                // Step 2: Generate WAV header
-                const wavHeader1 = createWavHeader(pcmData1.length);
-                const wavData1 = Buffer.concat([wavHeader1, pcmData1]);
+                // // Step 2: Generate WAV header
+                // const wavHeader1 = createWavHeader(pcmData1.length);
+                // const wavData1 = Buffer.concat([wavHeader1, pcmData1]);
 
-                // Step 3: Write to file
-                const outputPath1 = path.join(__dirname, 'outputaudiofile.wav');
-                fs.writeFileSync(outputPath1, wavData1);
+                // // Step 3: Write to file
+                // const outputPath1 = path.join(__dirname, 'outputaudiofile.wav');
+                // fs.writeFileSync(outputPath1, wavData1);
+
+                const combinedAudio = geminiOutputbuffer.reduce((acc, turn) => {
+                  if (turn.data) {
+                    const buffer = Buffer.from(turn.data, 'base64');
+                    const intArray = new Int16Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / Int16Array.BYTES_PER_ELEMENT);
+                    return acc.concat(Array.from(intArray));
+                  }
+                  return acc;
+                }, []);
+                const audioBuffer = new Int16Array(combinedAudio);
+                const wf = new WaveFile();
+                wf.fromScratch(1, 24000, '16', audioBuffer);
+                let wavBuffer = wf.toBuffer();
+                fs.writeFileSync('outputaudiofile.wav', wavBuffer);
 
                 console.log('output WAV file written to:', outputPath);
 
