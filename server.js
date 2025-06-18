@@ -242,6 +242,7 @@ wss.on('connection', async (ws) => {
                         convertPcm24kToSlin8kBase64(message.data)
                             .then(result => {
                                 sendMediaToExotel(ws, stream_sid, result, sequence_number, sequence_number);
+                                sequence_number++;
                                 console.log('Converted to 8kHz SLIN Base64:', result);
                             })
                             .catch(console.error);
