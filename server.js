@@ -162,8 +162,8 @@ wss.on('connection', async (ws) => {
         bufferTimeoutId = null; // Clear the timeout ID as it has now executed
     }
 
-    function writeLogFile(jsonObject) {
-        const filePath = path.join(__dirname, 'logfile.json');
+    function writeLogFile(jsonObject, fileName) {
+        const filePath = path.join(__dirname, fileName);
 
         const logLine = JSON.stringify(jsonObject) + '\n';
 
@@ -243,7 +243,7 @@ wss.on('connection', async (ws) => {
                             .then(result => {
                                 sendMediaToExotel(ws, stream_sid, result, sequence_number, sequence_number);
                                 sequence_number++;
-                                console.log('Converted to 8kHz SLIN Base64:', result);
+                                // console.log('Converted to 8kHz SLIN Base64:', result);
                             })
                             .catch(console.error);
 
@@ -310,7 +310,7 @@ wss.on('connection', async (ws) => {
         if (liveSession && isLiveSessionOpen) {
             // console.log('[Server ws.onmessage] Live session IS considered open.');
             const parsedMessage = JSON.parse(message);
-            await writeLogFile(parsedMessage);
+            await writeLogFile(parsedMessage, 'inMessageLog.json');
             if (parsedMessage.event == "connected") {
                 console.log("WS Connection established with exotel.", parsedMessage);
             } else if (parsedMessage.event == "start") {
@@ -470,7 +470,14 @@ function sendMediaToExotel(ws, streamSid = 0, payload, chunk = 0, sequenceNumber
         }
     };
     ws.send(JSON.stringify(message));
-    console.log('Sent media message to Exotel:', message);
+    const filePath = path.join(__dirname, "outMessageLog.json");
+    const logLine = JSON.stringify(message) + '\n';
+    fs.appendFile(filePath, logLine, (err) => {
+        if (err) {
+            console.error('Error writing to outlogfile:', err);
+        }
+    });
+    // console.log('Sent media message to Exotel:', message);
 }
 
 server.listen(PORT, () => {
