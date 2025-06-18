@@ -322,20 +322,21 @@ wss.on('connection', async (ws) => {
                 // fs.writeFileSync(outputPath1, wavData1);
 
                 const combinedAudio = geminiOutputbuffer.reduce((acc, turn) => {
-                  if (turn.data) {
-                    const buffer = Buffer.from(turn.data, 'base64');
-                    const intArray = new Int16Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / Int16Array.BYTES_PER_ELEMENT);
-                    return acc.concat(Array.from(intArray));
-                  }
-                  return acc;
+                    if (turn.data) {
+                        const buffer = Buffer.from(turn.data, 'base64');
+                        const intArray = new Int16Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / Int16Array.BYTES_PER_ELEMENT);
+                        return acc.concat(Array.from(intArray));
+                    }
+                    return acc;
                 }, []);
                 const audioBuffer = new Int16Array(combinedAudio);
                 const wf = new WaveFile();
                 wf.fromScratch(1, 24000, '16', audioBuffer);
                 let wavBuffer = wf.toBuffer();
-                fs.writeFileSync('outputaudiofile.wav', wavBuffer);
+                const outputPath1 = path.join(__dirname, 'outputaudiofile.wav');
+                fs.writeFileSync(outputPath1, wavBuffer);
 
-                console.log('output WAV file written to:', outputPath);
+                console.log('output WAV file written to:', outputPath1);
 
                 /******* */
             } else if (parsedMessage.event == "mark") {
