@@ -69,6 +69,8 @@ wss.on('connection', async (ws) => {
     let geminiOutputbuffer = []
     let bufferTimeoutId = null;
     const BUFFER_TIMEOUT_DURATION = 1000; // 1 second
+    let stream_sid = null
+    let sequence_number = 1
 
     function bufferToStream(buffer) {
         const stream = new Readable();
@@ -239,7 +241,7 @@ wss.on('connection', async (ws) => {
 
                         convertPcm24kToSlin8kBase64(message.data)
                             .then(result => {
-                                sendMediaToExotel(ws, 0, result, 0, 0);
+                                sendMediaToExotel(ws, stream_sid, result, sequence_number, sequence_number);
                                 console.log('Converted to 8kHz SLIN Base64:', result);
                             })
                             .catch(console.error);
@@ -388,6 +390,9 @@ wss.on('connection', async (ws) => {
                 console.log("MARK event from exotel: ", parsedMessage);
             } else if (parsedMessage.event == "media" && parsedMessage.media.payload) {
                 console.log('[Server ws.onmessage] Message from exotel.');
+                if (!stream_sid) {
+                    stream_sid = parsedMessage.stream_sid
+                }
                 // const base64Audio = message.toString('base64');
                 // console.log('[Client -> AI] Processing client audio. Raw message size:', message.length, 'Base64 size:', base64Audio.length);
                 // try {
@@ -406,7 +411,7 @@ wss.on('connection', async (ws) => {
                 // console.log(`[Server ws.onmessage] Media payload added to buffer. Buffer now has ${mediaPayloadBuffer.length} chunks.`);
                 // const wavBase64 = pcmToWavBase64(parsedMessage.media.payload);
                 // console.log(`[Server ws.onmessage] Sending buffered audio. Chunks: ${mediaPayloadBuffer.length}, Total combined size: ${combinedPayload.length}`);
-                const rawBuffer = Buffer.from(parsedMessage.media.payload, 'base64');
+                // const rawBuffer = Buffer.from(parsedMessage.media.payload, 'base64');
                 try {
                     liveSession.sendRealtimeInput({
                         audio: {
