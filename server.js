@@ -193,8 +193,8 @@ wss.on('connection', async (ws) => {
                         console.log("Message from AI");
 
                         // Send audio as binary with a type prefix
-                        const audioBuffer = Buffer.from(message.data, 'base64');
-                        geminiOutputbuffer.push(audioBuffer)
+                        // const audioBuffer = Buffer.from(message.data, 'base64');
+                        geminiOutputbuffer.push(message.data)
                         // const base64Slin = await convertToSlinBase64(audioBuffer);
                         // const typeBuffer = Buffer.from([0x01]); // 0x01 = audio data
                         // const combinedBuffer = Buffer.concat([typeBuffer, audioBuffer]);
