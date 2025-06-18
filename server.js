@@ -199,7 +199,8 @@ wss.on('connection', async (ws) => {
                         // const typeBuffer = Buffer.from([0x01]); // 0x01 = audio data
                         // const combinedBuffer = Buffer.concat([typeBuffer, audioBuffer]);
                         // ws.send(combinedBuffer);
-                        sendMediaToExotel(ws, 0, message.data, 0, 0);
+                        
+                        // sendMediaToExotel(ws, 0, message.data, 0, 0);
                     } else if (message.serverContent) {
                         if (message.serverContent.outputTranscription) {
                             // We are not displaying transcription in this app, but logging it.
