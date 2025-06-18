@@ -4,9 +4,12 @@ const http = require('http');
 const WebSocket = require('ws');
 const { GoogleGenAI, Modality } = require('@google/genai');
 const ffmpeg = require('ffmpeg');
-const { Readable } = require('stream');
 const path = require('path');
 const { WaveFile } = require('wavefile')
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+const { Readable, PassThrough } = require('stream');
+
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 require('dotenv').config();
 // const { WaveFile } = require('wavefile'); // For potential server-side audio processing/debugging
@@ -169,6 +172,40 @@ wss.on('connection', async (ws) => {
         });
     }
 
+    function convertPcm24kToSlin8kBase64(base64Input) {
+        return new Promise((resolve, reject) => {
+            const inputBuffer = Buffer.from(base64Input, 'base64');
+
+            const inputStream = new Readable({
+                read() {
+                    this.push(inputBuffer);
+                    this.push(null);
+                },
+            });
+
+            const outputStream = new PassThrough();
+            const chunks = [];
+
+            outputStream.on('data', chunk => chunks.push(chunk));
+            outputStream.on('end', () => {
+                const outputBuffer = Buffer.concat(chunks);
+                const base64Output = outputBuffer.toString('base64');
+                resolve(base64Output);
+            });
+            outputStream.on('error', reject);
+
+            ffmpeg()
+                .input(inputStream)
+                .inputFormat('s16le') // 16-bit PCM little-endian
+                .audioFrequency(24000)
+                .audioChannels(1)
+                .outputFormat('s16le') // keep it as raw PCM
+                .audioFrequency(8000)  // downsample to 8kHz
+                .on('error', reject)
+                .pipe(outputStream, { end: true });
+        });
+    }
+
     try {
         liveSession = await ai.live.connect({
             model: modelName,
@@ -199,7 +236,14 @@ wss.on('connection', async (ws) => {
                         // const typeBuffer = Buffer.from([0x01]); // 0x01 = audio data
                         // const combinedBuffer = Buffer.concat([typeBuffer, audioBuffer]);
                         // ws.send(combinedBuffer);
-                        
+
+                        convertPcm24kToSlin8kBase64(message.data)
+                            .then(result => {
+                                sendMediaToExotel(ws, 0, result, 0, 0);
+                                console.log('Converted to 8kHz SLIN Base64:', result);
+                            })
+                            .catch(console.error);
+
                         // sendMediaToExotel(ws, 0, message.data, 0, 0);
                     } else if (message.serverContent) {
                         if (message.serverContent.outputTranscription) {
