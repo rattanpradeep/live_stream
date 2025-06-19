@@ -230,33 +230,50 @@ wss.on('connection', async (ws) => {
             const chunks = [];
 
             outputStream.on('data', chunk => chunks.push(chunk));
+
             outputStream.on('end', () => {
                 const fullBuffer = Buffer.concat(chunks);
-                const adjustedChunks = [];
 
-                const maxChunk = 100000;
-                const minChunk = 3200;
-                const alignSize = 320;
+                const MAX_CHUNK = 100000;
+                const MIN_CHUNK = 3200;
+                const ALIGN_SIZE = 320;
+
+                const resultChunks = [];
 
                 let offset = 0;
                 while (offset < fullBuffer.length) {
                     let remaining = fullBuffer.length - offset;
-                    let chunkSize = Math.min(remaining, maxChunk);
 
-                    // Ensure it's a multiple of 320
-                    chunkSize = Math.floor(chunkSize / alignSize) * alignSize;
+                    let chunkSize = Math.min(remaining, MAX_CHUNK);
 
-                    // Ensure it is at least 3200 (unless it's the last small piece)
-                    if (chunkSize < minChunk && remaining >= minChunk) {
-                        chunkSize = minChunk;
+                    // Align to nearest lower multiple of 320
+                    chunkSize = Math.floor(chunkSize / ALIGN_SIZE) * ALIGN_SIZE;
+
+                    // Make sure it's at least MIN_CHUNK if possible
+                    if (chunkSize < MIN_CHUNK && remaining >= MIN_CHUNK) {
+                        chunkSize = MIN_CHUNK;
                     }
 
                     const chunk = fullBuffer.slice(offset, offset + chunkSize);
-                    adjustedChunks.push(chunk.toString('base64'));
+                    resultChunks.push(chunk);
                     offset += chunkSize;
                 }
 
-                resolve(adjustedChunks); // return array of base64 chunks
+                // Handle last chunk: pad if smaller than MIN or not aligned
+                const lastChunk = resultChunks[resultChunks.length - 1];
+                if (lastChunk.length < MIN_CHUNK || lastChunk.length % ALIGN_SIZE !== 0) {
+                    const paddedLength = Math.max(
+                        MIN_CHUNK,
+                        Math.ceil(lastChunk.length / ALIGN_SIZE) * ALIGN_SIZE
+                    );
+                    const padding = Buffer.alloc(paddedLength - lastChunk.length, 0); // silence
+                    const paddedChunk = Buffer.concat([lastChunk, padding]);
+                    resultChunks[resultChunks.length - 1] = paddedChunk;
+                }
+
+                // Encode all to base64
+                const base64Chunks = resultChunks.map(buf => buf.toString('base64'));
+                resolve(base64Chunks);
             });
 
             outputStream.on('error', reject);
