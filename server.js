@@ -311,16 +311,38 @@ wss.on('connection', async (ws) => {
     //     });
     // }
 
-    async function convertPcm24kToSlin8kBase64(inputPcm16LeMono24kHz) {
-        if (!Buffer.isBuffer(inputPcm16LeMono24kHz)) {
-            throw new TypeError('Input must be a Buffer.');
+    async function convertPcm24kToSlin8kBase64(inputBase64Audio) {
+        if (typeof inputBase64Audio !== 'string') {
+            throw new TypeError('Input must be a base64 encoded string.');
         }
+        if (inputBase64Audio.length === 0) {
+            // console.log("Input is an empty string, returning empty string.");
+            return ""; // Consistent with handling empty buffer later
+        }
+
+        let inputPcm16LeMono24kHz;
+        try {
+            inputPcm16LeMono24kHz = Buffer.from(inputBase64Audio, 'base64');
+        } catch (error) {
+            console.error("Base64 decoding failed:", error);
+            throw new Error(`Invalid base64 input: ${error.message}`);
+        }
+
+        // Existing validation for the decoded buffer
         if (inputPcm16LeMono24kHz.length % 2 !== 0) {
-            throw new Error('Input buffer length must be even for 16-bit PCM.');
+            throw new Error('Decoded audio buffer length must be even for 16-bit PCM.');
         }
-        if (inputPcm16LeMono24kHz.length === 0) {
+        if (inputPcm16LeMono24kHz.length === 0 && inputBase64Audio.length > 0) {
+            // This case implies valid base64 that decoded to empty, e.g. base64 of empty string.
+            // Or if inputBase64Audio was just padding characters.
+            // console.log("Base64 input decoded to an empty buffer, returning empty string.");
             return "";
         }
+        if (inputPcm16LeMono24kHz.length === 0 && inputBase64Audio.length === 0) {
+            // Already handled by initial string length check, but good for clarity
+            return "";
+        }
+
 
         const inputSampleRate = 24000;
         const outputSampleRate = 8000;
@@ -328,6 +350,7 @@ wss.on('connection', async (ws) => {
 
         try {
             // 1. Input Node.js Buffer (Int16 PCM) to Web Audio AudioBuffer (Float32)
+            // This part now uses the decoded inputPcm16LeMono24kHz
             const numInputFrames = inputPcm16LeMono24kHz.length / 2;
 
             const sourceWebAudioBuffer = new AudioBuffer({
@@ -346,7 +369,7 @@ wss.on('connection', async (ws) => {
             const numOutputFrames = Math.floor(numInputFrames * (outputSampleRate / inputSampleRate));
             if (numOutputFrames === 0) {
                 if (numInputFrames > 0) {
-                    console.warn("Audio conversion: Output frames calculated to 0, input might be too short for resampling to 8kHz. Returning empty string.");
+                    console.warn("Audio conversion: Output frames calculated to 0 after resampling, input might be too short. Returning empty string.");
                 }
                 return "";
             }
@@ -371,11 +394,11 @@ wss.on('connection', async (ws) => {
                 outputNodeBuffer.writeInt16LE(int16Sample, i * 2);
             }
 
-            // 4. Base64 Encode
+            // 4. Base64 Encode (output is already base64 as per original requirement)
             return outputNodeBuffer.toString('base64');
 
         } catch (error) {
-            console.error("Error during audio conversion:", error);
+            console.error("Error during audio conversion process:", error);
             throw new Error(`Audio conversion failed: ${error.message}`);
         }
     }
