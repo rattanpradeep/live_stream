@@ -299,10 +299,10 @@ wss.on('connection', async (ws) => {
                         // const combinedBuffer = Buffer.concat([typeBuffer, audioBuffer]);
                         // ws.send(combinedBuffer);
 
-                        convertPcm24kToSlin8kBase64(message.data)
+                        await convertPcm24kToSlin8kBase64(message.data)
                             .then(result => {
-                                setTimeout(() => {
-                                    sendMediaToExotel(ws, stream_sid, result, sequence_number, sequence_number);
+                                setTimeout(async() => {
+                                    await sendMediaToExotel(ws, stream_sid, result, sequence_number, sequence_number);
                                     sequence_number++;
                                 }, 20)
 
