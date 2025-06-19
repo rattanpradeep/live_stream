@@ -466,7 +466,7 @@ function sendMediaToExotel(ws, streamSid = 0, payload, chunk = 0, sequenceNumber
         sequence_number: `${sequenceNumber}`,
         media: {
             chunk: `${chunk}`,
-            timestamp: timestamp,
+            timestamp: `${timestamp}`,
             payload: payload
         }
     };
