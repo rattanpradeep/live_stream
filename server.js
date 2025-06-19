@@ -465,7 +465,8 @@ wss.on('connection', async (ws) => {
                         }
                         if (message.serverContent.interrupted) {
                             console.log('AI generation was interrupted.');
-                            const typeBuffer = Buffer.from([0x03]); // 0x03 = interruption
+                            sendClearEventToExotel(ws, stream_sid);
+                            // const typeBuffer = Buffer.from([0x03]); // 0x03 = interruption
                             // ws.send(typeBuffer);
                         }
                     } else if (message.error) {
@@ -676,6 +677,21 @@ function sendMediaToExotel(ws, streamSid = 0, payload, chunk = 0, sequenceNumber
         }
     });
     // console.log('Sent media message to Exotel:', message);
+}
+
+function sendClearEventToExotel(ws, streamSid = 0) {
+    const message = {
+        "event": "clear",
+        "stream_sid": streamSid,
+    }
+    ws.send(JSON.stringify(message));
+    const filePath = path.join(__dirname, "outMessageLog.json");
+    const logLine = JSON.stringify(message) + '\n';
+    fs.appendFile(filePath, logLine, (err) => {
+        if (err) {
+            console.error('Error writing to outlogfile:', err);
+        }
+    });
 }
 
 server.listen(PORT, () => {
