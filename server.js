@@ -174,6 +174,40 @@ wss.on('connection', async (ws) => {
         });
     }
 
+    // function convertPcm24kToSlin8kBase64(base64Input) {
+    //     return new Promise((resolve, reject) => {
+    //         const inputBuffer = Buffer.from(base64Input, 'base64');
+
+    //         const inputStream = new Readable({
+    //             read() {
+    //                 this.push(inputBuffer);
+    //                 this.push(null);
+    //             },
+    //         });
+
+    //         const outputStream = new PassThrough();
+    //         const chunks = [];
+
+    //         outputStream.on('data', chunk => chunks.push(chunk));
+    //         outputStream.on('end', () => {
+    //             const outputBuffer = Buffer.concat(chunks);
+    //             const base64Output = outputBuffer.toString('base64');
+    //             resolve(base64Output);
+    //         });
+    //         outputStream.on('error', reject);
+
+    //         ffmpeg()
+    //             .input(inputStream)
+    //             .inputFormat('s16le') // 16-bit PCM little-endian
+    //             .audioFrequency(24000)
+    //             .audioChannels(1)
+    //             .outputFormat('s16le') // keep it as raw PCM
+    //             .audioFrequency(8000)  // downsample to 8kHz
+    //             .on('error', reject)
+    //             .pipe(outputStream, { end: true });
+    //     });
+    // }
+
     function convertPcm24kToSlin8kBase64(base64Input) {
         return new Promise((resolve, reject) => {
             const inputBuffer = Buffer.from(base64Input, 'base64');
@@ -182,7 +216,7 @@ wss.on('connection', async (ws) => {
                 read() {
                     this.push(inputBuffer);
                     this.push(null);
-                },
+                }
             });
 
             const outputStream = new PassThrough();
@@ -191,18 +225,25 @@ wss.on('connection', async (ws) => {
             outputStream.on('data', chunk => chunks.push(chunk));
             outputStream.on('end', () => {
                 const outputBuffer = Buffer.concat(chunks);
-                const base64Output = outputBuffer.toString('base64');
-                resolve(base64Output);
+                resolve(outputBuffer.toString('base64'));
             });
             outputStream.on('error', reject);
 
             ffmpeg()
                 .input(inputStream)
-                .inputFormat('s16le') // 16-bit PCM little-endian
-                .audioFrequency(24000)
-                .audioChannels(1)
-                .outputFormat('s16le') // keep it as raw PCM
-                .audioFrequency(8000)  // downsample to 8kHz
+                .inputOptions([
+                    '-f s16le',     // raw PCM format
+                    '-ar 24000',    // input sample rate
+                    '-ac 1'         // mono
+                ])
+                .outputOptions([
+                    '-f s16le',     // output raw PCM
+                    '-ar 8000',     // output sample rate
+                    '-ac 1',        // mono
+                    '-sample_fmt s16' // ensure 16-bit output
+                ])
+                .on('start', cmd => console.log('[ffmpeg] Starting:', cmd))
+                .on('stderr', line => console.log('[ffmpeg] STDERR:', line))
                 .on('error', reject)
                 .pipe(outputStream, { end: true });
         });
