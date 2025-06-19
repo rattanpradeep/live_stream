@@ -239,16 +239,16 @@ wss.on('connection', async (ws) => {
                         // const combinedBuffer = Buffer.concat([typeBuffer, audioBuffer]);
                         // ws.send(combinedBuffer);
 
-                        // convertPcm24kToSlin8kBase64(message.data)
-                        //     .then(result => {
-                        //         sendMediaToExotel(ws, stream_sid, result, sequence_number, sequence_number);
-                        //         sequence_number++;
-                        //         // console.log('Converted to 8kHz SLIN Base64:', result);
-                        //     })
-                        //     .catch(console.error);
+                        convertPcm24kToSlin8kBase64(message.data)
+                            .then(result => {
+                                sendMediaToExotel(ws, stream_sid, result, sequence_number, sequence_number);
+                                sequence_number++;
+                                // console.log('Converted to 8kHz SLIN Base64:', result);
+                            })
+                            .catch(console.error);
 
-                        sendMediaToExotel(ws, stream_sid, message.data, sequence_number, sequence_number);
-                        sequence_number++;
+                        // sendMediaToExotel(ws, stream_sid, message.data, sequence_number, sequence_number);
+                        // sequence_number++;
                     } else if (message.serverContent) {
                         if (message.serverContent.outputTranscription) {
                             // We are not displaying transcription in this app, but logging it.
