@@ -463,11 +463,11 @@ function sendMediaToExotel(ws, streamSid = 0, payload, chunk = 0, sequenceNumber
     const message = {
         event: 'media',
         stream_sid: streamSid,
-        sequence_number: sequenceNumber,
+        sequence_number: `${sequenceNumber}`,
         media: {
-            payload: payload,
-            chunk: chunk,
-            timestamp: timestamp
+            chunk: `${chunk}`,
+            timestamp: timestamp,
+            payload: payload
         }
     };
     ws.send(JSON.stringify(message));
