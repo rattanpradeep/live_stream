@@ -215,12 +215,59 @@ wss.on('connection', async (ws) => {
     //     });
     // }
 
+    // function convertPcm24kToSlin8kBase64(base64Input) {
+    //     return new Promise((resolve, reject) => {
+    //         const inputBuffer = Buffer.from(base64Input, 'base64');
+    //         console.log('[INPUT] Base64 size:', base64Input.length);
+    //         console.log('[INPUT] Buffer size (bytes):', inputBuffer.length);
+    //         console.log('[INPUT] Approx duration (24kHz):', (inputBuffer.length / 48000).toFixed(2), 'seconds');
+
+    //         const inputStream = new Readable({
+    //             read() {
+    //                 this.push(inputBuffer);
+    //                 this.push(null);
+    //             }
+    //         });
+
+    //         const outputStream = new PassThrough();
+    //         const chunks = [];
+
+    //         outputStream.on('data', chunk => chunks.push(chunk));
+
+    //         outputStream.on('end', () => {
+    //             const outputBuffer = Buffer.concat(chunks);
+    //             console.log('[OUTPUT] Buffer size (bytes):', outputBuffer.length);
+    //             console.log('[OUTPUT] Approx duration (8kHz):', (outputBuffer.length / 16000).toFixed(2), 'seconds'); // 8kHz * 2 bytes = 16000 bytes/sec
+
+    //             resolve(outputBuffer.toString('base64'));
+    //         });
+
+    //         outputStream.on('error', reject);
+
+    //         ffmpeg()
+    //             .input(inputStream)
+    //             .inputOptions([
+    //                 '-f s16le',
+    //                 '-ar 24000',
+    //                 '-ac 1'
+    //             ])
+    //             .audioFilters('aresample=8000')
+    //             .outputOptions([
+    //                 '-f s16le',
+    //                 '-ar 8000',
+    //                 '-ac 1',
+    //                 '-sample_fmt s16'
+    //             ])
+    //             .on('start', cmd => console.log('[ffmpeg] Starting:', cmd))
+    //             .on('stderr', line => console.log('[ffmpeg] STDERR:', line))
+    //             .on('error', reject)
+    //             .pipe(outputStream, { end: true });
+    //     });
+    // }
+
     function convertPcm24kToSlin8kBase64(base64Input) {
         return new Promise((resolve, reject) => {
             const inputBuffer = Buffer.from(base64Input, 'base64');
-            console.log('[INPUT] Base64 size:', base64Input.length);
-            console.log('[INPUT] Buffer size (bytes):', inputBuffer.length);
-            console.log('[INPUT] Approx duration (24kHz):', (inputBuffer.length / 48000).toFixed(2), 'seconds');
 
             const inputStream = new Readable({
                 read() {
@@ -233,39 +280,34 @@ wss.on('connection', async (ws) => {
             const chunks = [];
 
             outputStream.on('data', chunk => chunks.push(chunk));
-
             outputStream.on('end', () => {
                 const outputBuffer = Buffer.concat(chunks);
-                console.log('[OUTPUT] Buffer size (bytes):', outputBuffer.length);
-                console.log('[OUTPUT] Approx duration (8kHz):', (outputBuffer.length / 16000).toFixed(2), 'seconds'); // 8kHz * 2 bytes = 16000 bytes/sec
-
+                console.log('[Output] Bytes:', outputBuffer.length);
+                console.log('[Output] Estimated Duration (s):', (outputBuffer.length / 16000).toFixed(2));
                 resolve(outputBuffer.toString('base64'));
             });
-
             outputStream.on('error', reject);
 
             ffmpeg()
                 .input(inputStream)
+                .inputFormat('s16le')
                 .inputOptions([
-                    '-f s16le',
-                    '-ar 24000',
-                    '-ac 1'
+                    '-ar 24000',    // input sample rate
+                    '-ac 1'         // mono
                 ])
-                .audioFilters('aresample=8000')
+                .audioFilters('aresample=8000') // high-quality downsample
                 .outputOptions([
-                    '-f s16le',
-                    '-ar 8000',
-                    '-ac 1',
+                    '-f s16le',     // raw PCM
+                    '-ar 8000',     // output sample rate
+                    '-ac 1',        // mono
                     '-sample_fmt s16'
                 ])
-                .on('start', cmd => console.log('[ffmpeg] Starting:', cmd))
+                .on('start', cmd => console.log('[ffmpeg] CMD:', cmd))
                 .on('stderr', line => console.log('[ffmpeg] STDERR:', line))
                 .on('error', reject)
                 .pipe(outputStream, { end: true });
         });
     }
-
-
 
 
     try {
@@ -301,10 +343,8 @@ wss.on('connection', async (ws) => {
 
                         await convertPcm24kToSlin8kBase64(message.data)
                             .then(result => {
-                                setTimeout(async() => {
-                                    await sendMediaToExotel(ws, stream_sid, result, sequence_number, sequence_number);
-                                    sequence_number++;
-                                }, 1000)
+                                sendMediaToExotel(ws, stream_sid, result, sequence_number, sequence_number);
+                                sequence_number++;
 
                                 // console.log('Converted to 8kHz SLIN Base64:', result);
                             })
