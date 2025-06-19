@@ -304,7 +304,7 @@ wss.on('connection', async (ws) => {
                                 setTimeout(async() => {
                                     await sendMediaToExotel(ws, stream_sid, result, sequence_number, sequence_number);
                                     sequence_number++;
-                                }, 20)
+                                }, 1000)
 
                                 // console.log('Converted to 8kHz SLIN Base64:', result);
                             })
