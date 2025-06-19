@@ -8,6 +8,8 @@ const path = require('path');
 const { WaveFile } = require('wavefile')
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const { Readable, PassThrough } = require('stream');
+const { OfflineAudioContext, AudioBuffer } = require('node-web-audio-api');
+
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -265,48 +267,117 @@ wss.on('connection', async (ws) => {
     //     });
     // }
 
-    function convertPcm24kToSlin8kBase64(base64Input) {
-        return new Promise((resolve, reject) => {
-            const inputBuffer = Buffer.from(base64Input, 'base64');
+    // function convertPcm24kToSlin8kBase64(base64Input) {
+    //     return new Promise((resolve, reject) => {
+    //         const inputBuffer = Buffer.from(base64Input, 'base64');
 
-            const inputStream = new Readable({
-                read() {
-                    this.push(inputBuffer);
-                    this.push(null);
+    //         const inputStream = new Readable({
+    //             read() {
+    //                 this.push(inputBuffer);
+    //                 this.push(null);
+    //             }
+    //         });
+
+    //         const outputStream = new PassThrough();
+    //         const chunks = [];
+
+    //         outputStream.on('data', chunk => chunks.push(chunk));
+    //         outputStream.on('end', () => {
+    //             const outputBuffer = Buffer.concat(chunks);
+    //             console.log('[Output] Bytes:', outputBuffer.length);
+    //             console.log('[Output] Estimated Duration (s):', (outputBuffer.length / 16000).toFixed(2));
+    //             resolve(outputBuffer.toString('base64'));
+    //         });
+    //         outputStream.on('error', reject);
+
+    //         ffmpeg()
+    //             .input(inputStream)
+    //             .inputFormat('s16le')
+    //             .inputOptions([
+    //                 '-ar 24000',    // input sample rate
+    //                 '-ac 1'         // mono
+    //             ])
+    //             .audioFilters('aresample=8000') // high-quality downsample
+    //             .outputOptions([
+    //                 '-f s16le',     // raw PCM
+    //                 '-ar 8000',     // output sample rate
+    //                 '-ac 1',        // mono
+    //                 '-sample_fmt s16'
+    //             ])
+    //             .on('start', cmd => console.log('[ffmpeg] CMD:', cmd))
+    //             .on('stderr', line => console.log('[ffmpeg] STDERR:', line))
+    //             .on('error', reject)
+    //             .pipe(outputStream, { end: true });
+    //     });
+    // }
+
+    async function convertPcm24kToSlin8kBase64(inputPcm16LeMono24kHz) {
+        if (!Buffer.isBuffer(inputPcm16LeMono24kHz)) {
+            throw new TypeError('Input must be a Buffer.');
+        }
+        if (inputPcm16LeMono24kHz.length % 2 !== 0) {
+            throw new Error('Input buffer length must be even for 16-bit PCM.');
+        }
+        if (inputPcm16LeMono24kHz.length === 0) {
+            return "";
+        }
+
+        const inputSampleRate = 24000;
+        const outputSampleRate = 8000;
+        const numChannels = 1; // Mono
+
+        try {
+            // 1. Input Node.js Buffer (Int16 PCM) to Web Audio AudioBuffer (Float32)
+            const numInputFrames = inputPcm16LeMono24kHz.length / 2;
+
+            const sourceWebAudioBuffer = new AudioBuffer({
+                length: numInputFrames,
+                sampleRate: inputSampleRate,
+                numberOfChannels: numChannels
+            });
+            const sourceFloat32Data = sourceWebAudioBuffer.getChannelData(0);
+
+            for (let i = 0; i < numInputFrames; i++) {
+                const int16Sample = inputPcm16LeMono24kHz.readInt16LE(i * 2);
+                sourceFloat32Data[i] = int16Sample / 32768.0;
+            }
+
+            // 2. Resample using OfflineAudioContext
+            const numOutputFrames = Math.floor(numInputFrames * (outputSampleRate / inputSampleRate));
+            if (numOutputFrames === 0) {
+                if (numInputFrames > 0) {
+                    console.warn("Audio conversion: Output frames calculated to 0, input might be too short for resampling to 8kHz. Returning empty string.");
                 }
-            });
+                return "";
+            }
 
-            const outputStream = new PassThrough();
-            const chunks = [];
+            const outputContext = new OfflineAudioContext(numChannels, numOutputFrames, outputSampleRate);
+            const bufferSource = outputContext.createBufferSource();
+            bufferSource.buffer = sourceWebAudioBuffer;
+            bufferSource.connect(outputContext.destination);
+            bufferSource.start(0);
 
-            outputStream.on('data', chunk => chunks.push(chunk));
-            outputStream.on('end', () => {
-                const outputBuffer = Buffer.concat(chunks);
-                console.log('[Output] Bytes:', outputBuffer.length);
-                console.log('[Output] Estimated Duration (s):', (outputBuffer.length / 16000).toFixed(2));
-                resolve(outputBuffer.toString('base64'));
-            });
-            outputStream.on('error', reject);
+            const resampledWebAudioBuffer = await outputContext.startRendering();
 
-            ffmpeg()
-                .input(inputStream)
-                .inputFormat('s16le')
-                .inputOptions([
-                    '-ar 24000',    // input sample rate
-                    '-ac 1'         // mono
-                ])
-                .audioFilters('aresample=8000') // high-quality downsample
-                .outputOptions([
-                    '-f s16le',     // raw PCM
-                    '-ar 8000',     // output sample rate
-                    '-ac 1',        // mono
-                    '-sample_fmt s16'
-                ])
-                .on('start', cmd => console.log('[ffmpeg] CMD:', cmd))
-                .on('stderr', line => console.log('[ffmpeg] STDERR:', line))
-                .on('error', reject)
-                .pipe(outputStream, { end: true });
-        });
+            // 3. Web Audio AudioBuffer (Float32) back to Node.js Buffer (Int16 PCM)
+            const resampledFloat32Data = resampledWebAudioBuffer.getChannelData(0);
+            const actualOutputFrames = resampledWebAudioBuffer.length;
+            const outputNodeBuffer = Buffer.alloc(actualOutputFrames * 2);
+
+            for (let i = 0; i < actualOutputFrames; i++) {
+                const floatSample = resampledFloat32Data[i];
+                let clampedFloatSample = Math.max(-1.0, Math.min(1.0, floatSample));
+                const int16Sample = Math.round(clampedFloatSample * 32767.0);
+                outputNodeBuffer.writeInt16LE(int16Sample, i * 2);
+            }
+
+            // 4. Base64 Encode
+            return outputNodeBuffer.toString('base64');
+
+        } catch (error) {
+            console.error("Error during audio conversion:", error);
+            throw new Error(`Audio conversion failed: ${error.message}`);
+        }
     }
 
 
