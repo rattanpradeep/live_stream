@@ -218,6 +218,9 @@ wss.on('connection', async (ws) => {
     function convertPcm24kToSlin8kBase64(base64Input) {
         return new Promise((resolve, reject) => {
             const inputBuffer = Buffer.from(base64Input, 'base64');
+            console.log('[INPUT] Base64 size:', base64Input.length);
+            console.log('[INPUT] Buffer size (bytes):', inputBuffer.length);
+            console.log('[INPUT] Approx duration (24kHz):', (inputBuffer.length / 48000).toFixed(2), 'seconds');
 
             const inputStream = new Readable({
                 read() {
@@ -232,48 +235,11 @@ wss.on('connection', async (ws) => {
             outputStream.on('data', chunk => chunks.push(chunk));
 
             outputStream.on('end', () => {
-                const fullBuffer = Buffer.concat(chunks);
+                const outputBuffer = Buffer.concat(chunks);
+                console.log('[OUTPUT] Buffer size (bytes):', outputBuffer.length);
+                console.log('[OUTPUT] Approx duration (8kHz):', (outputBuffer.length / 16000).toFixed(2), 'seconds'); // 8kHz * 2 bytes = 16000 bytes/sec
 
-                const MAX_CHUNK = 100000;
-                const MIN_CHUNK = 3200;
-                const ALIGN_SIZE = 320;
-
-                const resultChunks = [];
-
-                let offset = 0;
-                while (offset < fullBuffer.length) {
-                    let remaining = fullBuffer.length - offset;
-
-                    let chunkSize = Math.min(remaining, MAX_CHUNK);
-
-                    // Align to nearest lower multiple of 320
-                    chunkSize = Math.floor(chunkSize / ALIGN_SIZE) * ALIGN_SIZE;
-
-                    // Make sure it's at least MIN_CHUNK if possible
-                    if (chunkSize < MIN_CHUNK && remaining >= MIN_CHUNK) {
-                        chunkSize = MIN_CHUNK;
-                    }
-
-                    const chunk = fullBuffer.slice(offset, offset + chunkSize);
-                    resultChunks.push(chunk);
-                    offset += chunkSize;
-                }
-
-                // Handle last chunk: pad if smaller than MIN or not aligned
-                const lastChunk = resultChunks[resultChunks.length - 1];
-                if (lastChunk.length < MIN_CHUNK || lastChunk.length % ALIGN_SIZE !== 0) {
-                    const paddedLength = Math.max(
-                        MIN_CHUNK,
-                        Math.ceil(lastChunk.length / ALIGN_SIZE) * ALIGN_SIZE
-                    );
-                    const padding = Buffer.alloc(paddedLength - lastChunk.length, 0); // silence
-                    const paddedChunk = Buffer.concat([lastChunk, padding]);
-                    resultChunks[resultChunks.length - 1] = paddedChunk;
-                }
-
-                // Encode all to base64
-                const base64Chunks = resultChunks.map(buf => buf.toString('base64'));
-                resolve(base64Chunks);
+                resolve(outputBuffer.toString('base64'));
             });
 
             outputStream.on('error', reject);
@@ -285,6 +251,7 @@ wss.on('connection', async (ws) => {
                     '-ar 24000',
                     '-ac 1'
                 ])
+                .audioFilters('aresample=8000')
                 .outputOptions([
                     '-f s16le',
                     '-ar 8000',
@@ -297,6 +264,9 @@ wss.on('connection', async (ws) => {
                 .pipe(outputStream, { end: true });
         });
     }
+
+
+
 
     try {
         liveSession = await ai.live.connect({
