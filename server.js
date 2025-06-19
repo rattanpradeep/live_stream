@@ -182,7 +182,7 @@ wss.on('connection', async (ws) => {
     //             read() {
     //                 this.push(inputBuffer);
     //                 this.push(null);
-    //             },
+    //             }
     //         });
 
     //         const outputStream = new PassThrough();
@@ -191,18 +191,25 @@ wss.on('connection', async (ws) => {
     //         outputStream.on('data', chunk => chunks.push(chunk));
     //         outputStream.on('end', () => {
     //             const outputBuffer = Buffer.concat(chunks);
-    //             const base64Output = outputBuffer.toString('base64');
-    //             resolve(base64Output);
+    //             resolve(outputBuffer.toString('base64'));
     //         });
     //         outputStream.on('error', reject);
 
     //         ffmpeg()
     //             .input(inputStream)
-    //             .inputFormat('s16le') // 16-bit PCM little-endian
-    //             .audioFrequency(24000)
-    //             .audioChannels(1)
-    //             .outputFormat('s16le') // keep it as raw PCM
-    //             .audioFrequency(8000)  // downsample to 8kHz
+    //             .inputOptions([
+    //                 '-f s16le',     // raw PCM format
+    //                 '-ar 24000',    // input sample rate
+    //                 '-ac 1'         // mono
+    //             ])
+    //             .outputOptions([
+    //                 '-f s16le',     // output raw PCM
+    //                 '-ar 8000',     // output sample rate
+    //                 '-ac 1',        // mono
+    //                 '-sample_fmt s16' // ensure 16-bit output
+    //             ])
+    //             .on('start', cmd => console.log('[ffmpeg] Starting:', cmd))
+    //             .on('stderr', line => console.log('[ffmpeg] STDERR:', line))
     //             .on('error', reject)
     //             .pipe(outputStream, { end: true });
     //     });
@@ -224,23 +231,48 @@ wss.on('connection', async (ws) => {
 
             outputStream.on('data', chunk => chunks.push(chunk));
             outputStream.on('end', () => {
-                const outputBuffer = Buffer.concat(chunks);
-                resolve(outputBuffer.toString('base64'));
+                const fullBuffer = Buffer.concat(chunks);
+                const adjustedChunks = [];
+
+                const maxChunk = 100000;
+                const minChunk = 3200;
+                const alignSize = 320;
+
+                let offset = 0;
+                while (offset < fullBuffer.length) {
+                    let remaining = fullBuffer.length - offset;
+                    let chunkSize = Math.min(remaining, maxChunk);
+
+                    // Ensure it's a multiple of 320
+                    chunkSize = Math.floor(chunkSize / alignSize) * alignSize;
+
+                    // Ensure it is at least 3200 (unless it's the last small piece)
+                    if (chunkSize < minChunk && remaining >= minChunk) {
+                        chunkSize = minChunk;
+                    }
+
+                    const chunk = fullBuffer.slice(offset, offset + chunkSize);
+                    adjustedChunks.push(chunk.toString('base64'));
+                    offset += chunkSize;
+                }
+
+                resolve(adjustedChunks); // return array of base64 chunks
             });
+
             outputStream.on('error', reject);
 
             ffmpeg()
                 .input(inputStream)
                 .inputOptions([
-                    '-f s16le',     // raw PCM format
-                    '-ar 24000',    // input sample rate
-                    '-ac 1'         // mono
+                    '-f s16le',
+                    '-ar 24000',
+                    '-ac 1'
                 ])
                 .outputOptions([
-                    '-f s16le',     // output raw PCM
-                    '-ar 8000',     // output sample rate
-                    '-ac 1',        // mono
-                    '-sample_fmt s16' // ensure 16-bit output
+                    '-f s16le',
+                    '-ar 8000',
+                    '-ac 1',
+                    '-sample_fmt s16'
                 ])
                 .on('start', cmd => console.log('[ffmpeg] Starting:', cmd))
                 .on('stderr', line => console.log('[ffmpeg] STDERR:', line))
