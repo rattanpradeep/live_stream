@@ -161,10 +161,10 @@ wss.on('connection', async (ws) => {
                     if (sessionTimeoutId) { clearTimeout(sessionTimeoutId); console.log('Cleared existing session timer on new session open.'); } // Existing line
                     // Add the new timer start here
                     sessionTimeoutId = setTimeout(() => {
-                        console.log('Session timeout: 120 seconds of inactivity after session opened. Closing session.');
+                        console.log('Session timeout: 60 seconds of inactivity after session opened. Closing session.');
                         if (liveSession) { liveSession.close(); }
                         sessionTimeoutId = null;
-                    }, 120000); // 120 seconds
+                    }, 60000); // 60 seconds
                     console.log('Session timer started on AI session open.'); // Added log
                 },
                 onmessage: async (message) => {
@@ -199,10 +199,10 @@ wss.on('connection', async (ws) => {
                             console.log('AI turn complete.');
                             if (sessionTimeoutId) { clearTimeout(sessionTimeoutId); }
                             sessionTimeoutId = setTimeout(() => {
-                                console.log('Session timeout: 120 seconds of inactivity. Closing session.');
+                                console.log('Session timeout: 60 seconds of inactivity. Closing session.');
                                 if (liveSession) { liveSession.close(); }
                                 sessionTimeoutId = null;
-                            }, 120000); // 120 seconds
+                            }, 60000); // 60 seconds
                         }
                         if (message.serverContent.interrupted) {
                             console.log('AI generation was interrupted.');
