@@ -25,6 +25,10 @@ const wss = new WebSocket.Server({ server });
 const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
 const modelName = 'gemini-2.5-flash-preview-native-audio-dialog';
 
+/**Get welcome audio buffer */
+const audioBuffer = fs.readFileSync('welcomeAudio.wav');
+const welcomeAudioBuffer = audioBuffer.toString('base64');
+
 // Read system instruction from file
 let systemInstructionContent = "";
 try {
@@ -251,6 +255,24 @@ wss.on('connection', async (ws) => {
                 console.log('[Server ws.onmessage] Message from exotel.');
                 if (!stream_sid) {
                     stream_sid = parsedMessage.stream_sid
+                    /**Send welcome Audio to user */
+                    convertPcm24kToSlin8kBase64(welcomeAudioBuffer)
+                        .then(result => {
+                            let timestamp = Date.now()
+                            const message = {
+                                event: 'media',
+                                stream_sid: stream_sid,
+                                sequence_number: `${sequence_number}`,
+                                media: {
+                                    chunk: `${sequence_number}`,
+                                    timestamp: `${timestamp}`,
+                                    payload: result
+                                }
+                            };
+                            ws.send(JSON.stringify(message));
+                            sequence_number++;
+                        })
+                        .catch(console.error);
                 }
                 try {
                     liveSession.sendRealtimeInput({
