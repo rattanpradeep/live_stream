@@ -169,7 +169,7 @@ wss.on('connection', async (ws) => {
                 },
                 onmessage: async (message) => {
                     if (message.data) { // Audio data from AI
-                        console.log("Message from AI");
+                        // console.log("Message from AI");
                         convertPcm24kToSlin8kBase64(message.data)
                             .then(result => {
                                 let timestamp = Date.now()
@@ -252,7 +252,7 @@ wss.on('connection', async (ws) => {
             } else if (parsedMessage.event == "mark") {
                 console.log("MARK event from exotel: ", parsedMessage);
             } else if (parsedMessage.event == "media" && parsedMessage.media.payload) {
-                console.log('[Server ws.onmessage] Message from exotel.');
+                // console.log('[Server ws.onmessage] Message from exotel.');
                 if (!stream_sid) {
                     stream_sid = parsedMessage.stream_sid
                     /**Send welcome Audio to user */
@@ -270,6 +270,7 @@ wss.on('connection', async (ws) => {
                                 }
                             };
                             ws.send(JSON.stringify(message));
+                            console.log("Welcome audio sent to Exotel")
                             sequence_number++;
                         })
                         .catch(console.error);
