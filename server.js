@@ -169,7 +169,7 @@ wss.on('connection', async (ws) => {
                 },
                 onmessage: async (message) => {
                     if (message.data) { // Audio data from AI
-                        // console.log("Message from AI");
+                        console.log("Message from AI");
                         convertPcm24kToSlin8kBase64(message.data)
                             .then(result => {
                                 let timestamp = Date.now()
@@ -183,7 +183,11 @@ wss.on('connection', async (ws) => {
                                         payload: result
                                     }
                                 };
-                                ws.send(JSON.stringify(message));
+                                if (result) {
+                                    ws.send(JSON.stringify(message));
+                                    console.log("Message sent to Exotel");
+
+                                }
                                 sequence_number++;
                             })
                             .catch(console.error);
