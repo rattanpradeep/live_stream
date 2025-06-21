@@ -55,6 +55,22 @@ if (systemInstructionContent) {
 // Serve static files (index.html, app.js)
 app.use(express.static('public')); // Assuming index.html and app.js will be moved to a 'public' folder
 
+/**New code */
+const Samplerate = require('@alexanderolsen/libsamplerate-js');
+
+// Initialize libsamplerate-js (Wasm)
+const libsampleratePromise = Samplerate();
+
+let samplerateAPI = null;
+
+libsampleratePromise.then(initializedLib => {
+    samplerateAPI = initializedLib;
+    console.log("[CONVERT_AUDIO] @alexanderolsen/libsamplerate-js initialized successfully.");
+}).catch(err => {
+    console.error("[CONVERT_AUDIO] Critical: Failed to initialize @alexanderolsen/libsamplerate-js:", err);
+});
+/** */
+
 wss.on('connection', async (ws) => {
     console.log('Client connected via WebSocket');
     let liveSession;
@@ -63,12 +79,112 @@ wss.on('connection', async (ws) => {
     let stream_sid = null
     let sequence_number = 1
 
+    // async function convertPcm24kToSlin8kBase64(inputBase64Audio) {
+    //     if (typeof inputBase64Audio !== 'string') {
+    //         throw new TypeError('Input must be a base64 encoded string.');
+    //     }
+    //     if (inputBase64Audio.length === 0) {
+    //         console.log("Input is an empty string, returning empty string.");
+    //         return "";
+    //     }
+
+    //     let inputPcm16LeMono24kHz;
+    //     try {
+    //         inputPcm16LeMono24kHz = Buffer.from(inputBase64Audio, 'base64');
+    //     } catch (error) {
+    //         console.error("Base64 decoding failed:", error);
+    //         throw new Error(`Invalid base64 input: ${error.message}`);
+    //     }
+
+    //     // Existing validation for the decoded buffer
+    //     if (inputPcm16LeMono24kHz.length % 2 !== 0) {
+    //         throw new Error('Decoded audio buffer length must be even for 16-bit PCM.');
+    //     }
+    //     if (inputPcm16LeMono24kHz.length === 0 && (inputBase64Audio.length > 0 || inputBase64Audio.length === 0)) {
+    //         // This case implies valid base64 that decoded to empty, e.g. base64 of empty string.
+    //         // Or if inputBase64Audio was just padding characters.
+    //         console.log("Base64 input decoded to an empty buffer, returning empty string.");
+    //         return "";
+    //     }
+
+    //     const inputSampleRate = 24000;
+    //     const outputSampleRate = 8000;
+    //     const numChannels = 1; // Mono
+
+    //     try {
+    //         // 1. Input Node.js Buffer (Int16 PCM) to Web Audio AudioBuffer (Float32)
+    //         // This part now uses the decoded inputPcm16LeMono24kHz
+    //         const numInputFrames = inputPcm16LeMono24kHz.length / 2;
+
+    //         const sourceWebAudioBuffer = new AudioBuffer({
+    //             length: numInputFrames,
+    //             sampleRate: inputSampleRate,
+    //             numberOfChannels: numChannels
+    //         });
+    //         const sourceFloat32Data = sourceWebAudioBuffer.getChannelData(0);
+
+    //         for (let i = 0; i < numInputFrames; i++) {
+    //             const int16Sample = inputPcm16LeMono24kHz.readInt16LE(i * 2);
+    //             sourceFloat32Data[i] = int16Sample / 32768.0;
+    //         }
+
+    //         // 2. Resample using OfflineAudioContext
+    //         const numOutputFrames = Math.floor(numInputFrames * (outputSampleRate / inputSampleRate));
+    //         if (numOutputFrames === 0) {
+    //             if (numInputFrames > 0) {
+    //                 console.warn("Audio conversion: Output frames calculated to 0 after resampling, input might be too short. Returning empty string.");
+    //             }
+    //             return "";
+    //         }
+
+    //         const outputContext = new OfflineAudioContext(numChannels, numOutputFrames, outputSampleRate);
+    //         const bufferSource = outputContext.createBufferSource();
+    //         bufferSource.buffer = sourceWebAudioBuffer;
+    //         bufferSource.connect(outputContext.destination);
+    //         bufferSource.start(0);
+
+    //         const resampledWebAudioBuffer = await outputContext.startRendering();
+
+    //         // 3. Web Audio AudioBuffer (Float32) back to Node.js Buffer (Int16 PCM)
+    //         const resampledFloat32Data = resampledWebAudioBuffer.getChannelData(0);
+    //         const actualOutputFrames = resampledWebAudioBuffer.length;
+    //         const outputNodeBuffer = Buffer.alloc(actualOutputFrames * 2);
+
+    //         for (let i = 0; i < actualOutputFrames; i++) {
+    //             const floatSample = resampledFloat32Data[i];
+    //             let clampedFloatSample = Math.max(-1.0, Math.min(1.0, floatSample));
+    //             const int16Sample = Math.round(clampedFloatSample * 32767.0);
+    //             outputNodeBuffer.writeInt16LE(int16Sample, i * 2);
+    //         }
+
+    //         // 4. Base64 Encode (output is already base64 as per original requirement)
+    //         return outputNodeBuffer.toString('base64');
+
+    //     } catch (error) {
+    //         console.error("Error during audio conversion process:", error);
+    //         throw new Error(`Audio conversion failed: ${error.message}`);
+    //     }
+    // }
+
     async function convertPcm24kToSlin8kBase64(inputBase64Audio) {
+        if (!samplerateAPI) {
+            // Wait for initialization if it hasn't completed.
+            try {
+                console.log("[CONVERT_AUDIO] Waiting for libsamplerate-js to initialize...");
+                await libsampleratePromise;
+                if (!samplerateAPI) {
+                    throw new Error("@alexanderolsen/libsamplerate-js is not initialized. Check console for errors during startup.");
+                }
+                console.log("[CONVERT_AUDIO] libsamplerate-js ready after wait.");
+            } catch (initError) {
+                throw new Error(`@alexanderolsen/libsamplerate-js initialization failed: ${initError.message}`);
+            }
+        }
+
         if (typeof inputBase64Audio !== 'string') {
             throw new TypeError('Input must be a base64 encoded string.');
         }
         if (inputBase64Audio.length === 0) {
-            console.log("Input is an empty string, returning empty string.");
             return "";
         }
 
@@ -76,18 +192,14 @@ wss.on('connection', async (ws) => {
         try {
             inputPcm16LeMono24kHz = Buffer.from(inputBase64Audio, 'base64');
         } catch (error) {
-            console.error("Base64 decoding failed:", error);
+            console.error("[CONVERT_AUDIO] Base64 decoding failed:", error);
             throw new Error(`Invalid base64 input: ${error.message}`);
         }
 
-        // Existing validation for the decoded buffer
         if (inputPcm16LeMono24kHz.length % 2 !== 0) {
             throw new Error('Decoded audio buffer length must be even for 16-bit PCM.');
         }
-        if (inputPcm16LeMono24kHz.length === 0 && (inputBase64Audio.length > 0 || inputBase64Audio.length === 0)) {
-            // This case implies valid base64 that decoded to empty, e.g. base64 of empty string.
-            // Or if inputBase64Audio was just padding characters.
-            console.log("Base64 input decoded to an empty buffer, returning empty string.");
+        if (inputPcm16LeMono24kHz.length === 0) {
             return "";
         }
 
@@ -95,58 +207,48 @@ wss.on('connection', async (ws) => {
         const outputSampleRate = 8000;
         const numChannels = 1; // Mono
 
+        let src_handle = null;
+
         try {
-            // 1. Input Node.js Buffer (Int16 PCM) to Web Audio AudioBuffer (Float32)
-            // This part now uses the decoded inputPcm16LeMono24kHz
-            const numInputFrames = inputPcm16LeMono24kHz.length / 2;
-
-            const sourceWebAudioBuffer = new AudioBuffer({
-                length: numInputFrames,
-                sampleRate: inputSampleRate,
-                numberOfChannels: numChannels
-            });
-            const sourceFloat32Data = sourceWebAudioBuffer.getChannelData(0);
-
+            const numInputFrames = inputPcm16LeMono24kHz.length / (2 * numChannels);
+            const inputFloat32Array = new Float32Array(numInputFrames * numChannels);
             for (let i = 0; i < numInputFrames; i++) {
-                const int16Sample = inputPcm16LeMono24kHz.readInt16LE(i * 2);
-                sourceFloat32Data[i] = int16Sample / 32768.0;
+                inputFloat32Array[i * numChannels] = inputPcm16LeMono24kHz.readInt16LE(i * 2 * numChannels) / 32768.0;
             }
 
-            // 2. Resample using OfflineAudioContext
-            const numOutputFrames = Math.floor(numInputFrames * (outputSampleRate / inputSampleRate));
-            if (numOutputFrames === 0) {
-                if (numInputFrames > 0) {
-                    console.warn("Audio conversion: Output frames calculated to 0 after resampling, input might be too short. Returning empty string.");
-                }
+            const converterType = samplerateAPI.SRC_SINC_BEST_QUALITY; // Use best quality
+            src_handle = samplerateAPI.new(converterType, numChannels);
+
+            const conversionRatio = outputSampleRate / inputSampleRate;
+
+            const resampledFloat32Array = samplerateAPI.process(
+                src_handle,
+                conversionRatio,
+                inputFloat32Array
+            );
+
+            if (!resampledFloat32Array || resampledFloat32Array.length === 0) {
+                console.warn("[CONVERT_AUDIO] Resampling with libsamplerate-js resulted in empty audio data.");
                 return "";
             }
 
-            const outputContext = new OfflineAudioContext(numChannels, numOutputFrames, outputSampleRate);
-            const bufferSource = outputContext.createBufferSource();
-            bufferSource.buffer = sourceWebAudioBuffer;
-            bufferSource.connect(outputContext.destination);
-            bufferSource.start(0);
-
-            const resampledWebAudioBuffer = await outputContext.startRendering();
-
-            // 3. Web Audio AudioBuffer (Float32) back to Node.js Buffer (Int16 PCM)
-            const resampledFloat32Data = resampledWebAudioBuffer.getChannelData(0);
-            const actualOutputFrames = resampledWebAudioBuffer.length;
-            const outputNodeBuffer = Buffer.alloc(actualOutputFrames * 2);
-
-            for (let i = 0; i < actualOutputFrames; i++) {
-                const floatSample = resampledFloat32Data[i];
-                let clampedFloatSample = Math.max(-1.0, Math.min(1.0, floatSample));
+            const numOutputFrames = resampledFloat32Array.length / numChannels;
+            const outputNodeBuffer = Buffer.alloc(numOutputFrames * 2 * numChannels);
+            for (let i = 0; i < numOutputFrames; i++) {
+                let clampedFloatSample = Math.max(-1.0, Math.min(1.0, resampledFloat32Array[i * numChannels]));
                 const int16Sample = Math.round(clampedFloatSample * 32767.0);
-                outputNodeBuffer.writeInt16LE(int16Sample, i * 2);
+                outputNodeBuffer.writeInt16LE(int16Sample, i * 2 * numChannels);
             }
 
-            // 4. Base64 Encode (output is already base64 as per original requirement)
             return outputNodeBuffer.toString('base64');
 
         } catch (error) {
-            console.error("Error during audio conversion process:", error);
-            throw new Error(`Audio conversion failed: ${error.message}`);
+            console.error("[CONVERT_AUDIO] Error during audio resampling process with libsamplerate-js:", error);
+            throw new Error(`Audio resampling failed: ${error.message}`);
+        } finally {
+            if (src_handle !== null && samplerateAPI) {
+                samplerateAPI.delete(src_handle);
+            }
         }
     }
 

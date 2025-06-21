@@ -11,6 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@alexanderolsen/libsamplerate-js": "^2.1.2",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@google/genai": "^1.4.0",
     "dotenv": "^16.5.0",
